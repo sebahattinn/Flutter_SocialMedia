@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Usage in ProfilePage:
-/// final s = ref.watch(followControllerProvider(FollowIds(me: '<uuid>', target: '<uuid>')));
 final followControllerProvider = StateNotifierProvider.autoDispose
     .family<FollowController, FollowState, FollowIds>((ref, ids) {
       final c = FollowController(ids);

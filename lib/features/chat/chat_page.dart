@@ -52,7 +52,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     ),
                     decoration: BoxDecoration(
                       color: m.mine
+                          // ignore: deprecated_member_use
                           ? Colors.blueAccent.withOpacity(.25)
+                          // ignore: deprecated_member_use
                           : Colors.grey.withOpacity(.25),
                       borderRadius: BorderRadius.circular(10),
                     ),

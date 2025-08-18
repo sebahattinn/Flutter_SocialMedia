@@ -203,8 +203,7 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
         }
         _videoDuration = d;
       } else {
-        // Web’de güvenilir client-side ölçüm zordur; server-side (Edge Function) önerilir.
-        _videoDuration = null;
+        _videoDuration = null; // web'de client-side güvenilir değil
       }
 
       _pickedVideo = file;
@@ -225,7 +224,7 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
     setState(() => _busy = true);
 
     try {
-      // Aynı anda hem video hem görsel istemiyoruz
+      // Aynı anda hem video hem görsel gönderme
       if (_hasImages && _hasVideo) {
         _snack('Aynı gönderide ya çoklu görsel ya da tek video seçebilirsin.');
         setState(() => _busy = false);
@@ -236,13 +235,12 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
       List<String> imageUrls = [];
       String? videoUrl;
 
-      // Görselleri yükle
+      // Görselleri yükle (güvenli path)
       if (_hasImages) {
         for (int i = 0; i < _pickedImages.length; i++) {
           final f = _pickedImages[i];
-          final safeName =
-              '${DateTime.now().millisecondsSinceEpoch}_${i}_${f.name}';
-          final path = 'images/$safeName';
+          final ext = _safeExt(f.name, fallback: 'jpg');
+          final path = _safeName(dir: 'images', ext: ext, index: i);
 
           if (kIsWeb) {
             final bytes = _previewBytes[i];
@@ -251,7 +249,7 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
                 bucket: 'media',
                 path: path,
                 fileOrBytes: bytes,
-                contentType: 'image/jpeg',
+                // contentType boş bırak -> SupabaseService path uzantısından tahmin ediyor
               ),
             );
           } else {
@@ -261,18 +259,17 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
                 bucket: 'media',
                 path: path,
                 fileOrBytes: file,
-                contentType: 'image/jpeg',
               ),
             );
           }
         }
       }
 
-      // Videoyu yükle
+      // Videoyu yükle (güvenli path)
       if (_hasVideo) {
         final f = _pickedVideo!;
-        final safeName = '${DateTime.now().millisecondsSinceEpoch}_${f.name}';
-        final path = 'videos/$safeName';
+        final ext = _safeExt(f.name, fallback: 'mp4');
+        final path = _safeName(dir: 'videos', ext: ext);
 
         if (kIsWeb) {
           final bytes = await f.readAsBytes();
@@ -280,14 +277,12 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
             bucket: 'media',
             path: path,
             fileOrBytes: bytes,
-            contentType: 'video/mp4', // çoğu cihaz mp4 veriyor
           );
         } else {
           videoUrl = await SupabaseService.upload(
             bucket: 'media',
             path: path,
             fileOrBytes: File(f.path),
-            contentType: 'video/mp4',
           );
         }
       }
@@ -343,4 +338,20 @@ class _CreatePostPageState extends ConsumerState<CreatePostPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
+}
+
+/// Yalnızca güvenli uzantıları kabul et (fallback ver)
+String _safeExt(String name, {required String fallback}) {
+  final dot = name.lastIndexOf('.');
+  if (dot == -1) return fallback;
+  final ext = name.substring(dot + 1).toLowerCase();
+  const allowed = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov'};
+  return allowed.contains(ext) ? ext : fallback;
+}
+
+
+String _safeName({required String dir, required String ext, int? index}) {
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  final idx = index != null ? '_$index' : '';
+  return '$dir/$ts$idx.$ext';
 }

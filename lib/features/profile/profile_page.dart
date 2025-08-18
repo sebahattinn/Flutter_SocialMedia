@@ -63,12 +63,12 @@ class ProfilePage extends ConsumerWidget {
                         icon: const Icon(Icons.person_add_alt_1),
                         label: const Text('Follow'),
                       ),
-                if (s is dynamic && s.loading == true)
+                if (s.loading == true)
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: LinearProgressIndicator(minHeight: 2),
                   ),
-                if (s is dynamic && s.error != null)
+                if (s.error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(

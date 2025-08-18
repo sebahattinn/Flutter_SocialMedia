@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
+// ignore: depend_on_referenced_packages
 import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -28,7 +29,7 @@ class SupabaseService {
     _inited = true;
   }
 
-  /// fileOrBytes: File (mobile/desktop) | Uint8List | List<int> (web)
+ 
   /// returns: public URL
   static Future<String> upload({
     required String bucket,
