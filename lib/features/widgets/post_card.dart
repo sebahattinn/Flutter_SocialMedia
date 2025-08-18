@@ -1,16 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+
 import '../../../../core/spacing.dart';
 import '../../../models/post.dart';
 import 'avatar.dart';
 import 'action_bar.dart';
 
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   final Post post;
   const PostCard({super.key, required this.post});
 
   @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  VideoPlayerController? _vc;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.post.hasVideo) {
+      _vc = VideoPlayerController.networkUrl(Uri.parse(widget.post.videoUrl!))
+        ..initialize().then((_) {
+          if (mounted) setState(() {});
+        });
+    }
+  }
+
+  @override
+  void dispose() {
+    _vc?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final post = widget.post;
     final radius = BorderRadius.circular(16);
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: radius),
       child: Column(
@@ -45,6 +73,7 @@ class PostCard extends StatelessWidget {
               ],
             ),
           ),
+
           if (post.text.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -53,20 +82,16 @@ class PostCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 15, height: 1.35),
               ),
             ),
-          if (post.imageUrl != null) ...[
+
+          if (post.hasVideo) ...[
             gap12,
-            ClipRRect(
-              borderRadius: BorderRadius.only(
-                bottomLeft: radius.bottomLeft,
-                bottomRight: radius.bottomRight,
-              ),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Image.network(post.imageUrl!, fit: BoxFit.cover),
-              ),
-            ),
+            _buildVideo(radius),
+          ] else if (post.hasImages) ...[
+            gap12,
+            _buildImages(radius, post.imageUrls),
           ] else
             gap12,
+
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
             child: ActionBar(
@@ -80,11 +105,121 @@ class PostCard extends StatelessWidget {
     );
   }
 
+  Widget _buildVideo(BorderRadius radius) {
+    final vc = _vc;
+    if (vc == null || !vc.value.isInitialized) {
+      return const AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    return ClipRRect(
+      borderRadius: radius,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AspectRatio(
+            aspectRatio: vc.value.aspectRatio,
+            child: VideoPlayer(vc),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: IconButton(
+              iconSize: 56,
+              onPressed: () => setState(() {
+                vc.value.isPlaying ? vc.pause() : vc.play();
+              }),
+              icon: Icon(
+                vc.value.isPlaying
+                    ? Icons.pause_circle_filled
+                    : Icons.play_circle_fill,
+                color: Colors.white70,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImages(BorderRadius radius, List<String> urls) {
+    if (urls.length == 1) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Image.network(urls.first, fit: BoxFit.cover),
+        ),
+      );
+    }
+
+    final controller = PageController();
+    return ClipRRect(
+      borderRadius: radius,
+      child: Column(
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: PageView.builder(
+              controller: controller,
+              itemCount: urls.length,
+              itemBuilder: (_, i) => Image.network(urls[i], fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(height: 6),
+          _Dots(controller: controller, length: urls.length),
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
     if (diff.inHours < 24) return '${diff.inHours}h';
     return '${diff.inDays}d';
+  }
+}
+
+class _Dots extends StatefulWidget {
+  final PageController controller;
+  final int length;
+  const _Dots({required this.controller, required this.length});
+
+  @override
+  State<_Dots> createState() => _DotsState();
+}
+
+class _DotsState extends State<_Dots> {
+  double _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(() {
+      if (mounted) setState(() => _page = widget.controller.page ?? 0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(widget.length, (i) {
+        final active = (i - _page).abs() < .5;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: active ? 16 : 8,
+          height: 8,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            color: active ? Colors.white70 : Colors.white24,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        );
+      }),
+    );
   }
 }
