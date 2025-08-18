@@ -4,7 +4,7 @@ class NetImage extends StatelessWidget {
   final String url;
   final double? width, height;
   final BoxFit fit;
-  final BorderRadiusGeometry? borderRadius; // <- geometry, nullable
+  final BorderRadiusGeometry? borderRadius;
   final Widget? placeholder;
   final Widget? fallback;
 
@@ -26,7 +26,6 @@ class NetImage extends StatelessWidget {
       width: width,
       height: height,
       fit: fit,
-      // loader
       loadingBuilder: (ctx, child, evt) {
         if (evt == null) return child;
         return Center(
@@ -37,7 +36,6 @@ class NetImage extends StatelessWidget {
           ),
         );
       },
-      // graceful fallback
       errorBuilder: (ctx, err, stack) =>
           fallback ??
           Container(
@@ -47,9 +45,8 @@ class NetImage extends StatelessWidget {
           ),
     );
 
-    if (borderRadius != null) {
-      return ClipRRect(borderRadius: borderRadius!, child: img);
-    }
-    return img;
+    return borderRadius != null
+        ? ClipRRect(borderRadius: borderRadius!, child: img)
+        : img;
   }
 }

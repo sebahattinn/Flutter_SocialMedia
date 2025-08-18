@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+
 import 'features/feed/feed_page.dart';
 import 'features/search/search_page.dart';
 import 'features/create/create_post_page.dart';
 import 'features/notifications/notifications_page.dart';
 import 'features/profile/profile_page.dart';
 
-/// Bottom navigation shell. No AppBar here; child pages own their headers.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 

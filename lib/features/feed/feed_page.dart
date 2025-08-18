@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
-import '../../models/mock_data.dart';
-import '../widgets/story_strip.dart';
-import '../widgets/post_card.dart';
-import '../widgets/composer_button.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:social_media_app/features/chat/chat_page.dart' show ChatPage;
+import 'package:social_media_app/features/widgets/composer_button.dart';
+import 'package:social_media_app/features/widgets/post_card.dart';
+import 'package:social_media_app/features/widgets/story_strip.dart';
+import 'package:social_media_app/models/mock_data.dart' as mock;
+import '../../state/feed_controller.dart';
 
-class FeedPage extends StatelessWidget {
+class FeedPage extends ConsumerWidget {
   const FeedPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(feedProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return CustomScrollView(
       slivers: [
-        // Minimal top bar; child controls its own UI
         SliverAppBar(
           floating: true,
           snap: true,
@@ -21,14 +25,22 @@ class FeedPage extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           backgroundColor: isDark ? Colors.black : Colors.white,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_outline),
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ChatPage())),
+            ),
+          ],
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 8)),
         const SliverToBoxAdapter(child: ComposerButton()),
         const SliverToBoxAdapter(child: SizedBox(height: 8)),
-        SliverToBoxAdapter(child: StoryStrip(users: users)),
+        SliverToBoxAdapter(child: StoryStrip(users: mock.users)),
         SliverList.separated(
-          itemCount: posts.length,
-          itemBuilder: (_, i) => PostCard(post: posts[i]),
+          itemCount: items.length,
+          itemBuilder: (_, i) => PostCard(post: items[i]),
           separatorBuilder: (_, __) => const SizedBox(height: 4),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 48)),

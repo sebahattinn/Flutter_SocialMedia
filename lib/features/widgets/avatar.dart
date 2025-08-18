@@ -8,7 +8,7 @@ class Avatar extends StatelessWidget {
   const Avatar({
     super.key,
     required this.url,
-    this.size = 38,
+    this.size = 38, // your default
     this.ring = false,
   });
 
