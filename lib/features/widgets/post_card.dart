@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Clipboard
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
-
 import '../../../../core/spacing.dart';
 import '../../../models/post.dart';
 import '../../../services/post_repo.dart';
+import '../../../state/video_coordinator.dart'; // <--- EKLEDİK
 import 'avatar.dart';
 import 'action_bar.dart';
 
@@ -21,7 +21,6 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   VideoPlayerController? _vc;
 
-  // images carousel state
   PageController? _imagePager;
   int _imgIndex = 0;
 
@@ -30,6 +29,9 @@ class _PostCardState extends State<PostCard> {
     super.initState();
     _initVideoIfNeeded();
     _initPagerIfNeeded();
+
+    // Başka bir kart oynatmaya başlarsa bu kart pause olsun
+    VideoCoordinator.current.addListener(_onGlobalPlayChanged);
   }
 
   @override
@@ -42,6 +44,19 @@ class _PostCardState extends State<PostCard> {
     if (oldWidget.post.imageUrls != widget.post.imageUrls) {
       _disposePager();
       _initPagerIfNeeded();
+    }
+  }
+
+  void _onGlobalPlayChanged() {
+    final current = VideoCoordinator.current.value;
+    final mine = current == widget.post.id;
+    final vc = _vc;
+    if (vc == null) return;
+
+    // Başkası çalıyorsa ben durayım
+    if (!mine && vc.value.isPlaying) {
+      vc.pause();
+      if (mounted) setState(() {});
     }
   }
 
@@ -74,6 +89,8 @@ class _PostCardState extends State<PostCard> {
 
   @override
   void dispose() {
+    VideoCoordinator.stopIfCurrent(widget.post.id);
+    VideoCoordinator.current.removeListener(_onGlobalPlayChanged);
     _disposeVideo();
     _disposePager();
     super.dispose();
@@ -112,8 +129,6 @@ class _PostCardState extends State<PostCard> {
                     ],
                   ),
                 ),
-
-                // === 3 nokta menüsü ===
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz),
                   onSelected: (value) async {
@@ -265,14 +280,16 @@ class _PostCardState extends State<PostCard> {
       );
     }
 
-    // ekrandan çıkınca pause
     return VisibilityDetector(
       key: Key('video-${widget.post.id}'),
       onVisibilityChanged: (info) {
         if (info.visibleFraction < 0.2) {
+          // ekrandan çıktı → durdur ve koordinatoru temizle
           if (vc.value.isPlaying) {
             vc.pause();
           }
+          VideoCoordinator.stopIfCurrent(widget.post.id);
+          if (mounted) setState(() {});
         }
       },
       child: ClipRRect(
@@ -288,12 +305,14 @@ class _PostCardState extends State<PostCard> {
               color: Colors.transparent,
               child: IconButton(
                 iconSize: 56,
-                // setState callback'inde Future döndürmeyelim
                 onPressed: () {
                   setState(() {
                     if (vc.value.isPlaying) {
                       vc.pause();
+                      VideoCoordinator.stopIfCurrent(widget.post.id);
                     } else {
+                      // ben oynayacağım → diğer kartlar listener ile pause olacak
+                      VideoCoordinator.requestPlay(widget.post.id);
                       vc.play();
                     }
                   });
@@ -316,7 +335,7 @@ class _PostCardState extends State<PostCard> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.black45,
           shape: BoxShape.circle,
         ),
@@ -360,7 +379,6 @@ class _PostCardState extends State<PostCard> {
             ),
           ),
 
-          // Sol ok
           if (hasMultiple && _imgIndex > 0)
             Positioned(
               left: 8,
@@ -377,7 +395,6 @@ class _PostCardState extends State<PostCard> {
               ),
             ),
 
-          // Sağ ok
           if (hasMultiple && _imgIndex < urls.length - 1)
             Positioned(
               right: 8,
@@ -394,7 +411,6 @@ class _PostCardState extends State<PostCard> {
               ),
             ),
 
-          // Dots
           Positioned(
             bottom: 6,
             child: _Dots(controller: pager, length: urls.length),
