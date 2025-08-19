@@ -4,7 +4,7 @@ import 'package:video_player/video_player.dart';
 import '../../../../core/spacing.dart';
 import '../../../models/post.dart';
 import 'avatar.dart';
-import 'action_bar.dart';
+import 'action_bar.dart'; // <-- ActionBar(postId: ...) sürümü
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -44,7 +44,7 @@ class _PostCardState extends State<PostCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // header
+          // HEADER
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: Row(
@@ -74,6 +74,7 @@ class _PostCardState extends State<PostCard> {
             ),
           ),
 
+          // TEXT
           if (post.text.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -83,6 +84,7 @@ class _PostCardState extends State<PostCard> {
               ),
             ),
 
+          // MEDIA
           if (post.hasVideo) ...[
             gap12,
             _buildVideo(radius),
@@ -92,12 +94,12 @@ class _PostCardState extends State<PostCard> {
           ] else
             gap12,
 
+          // ACTIONS
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
             child: ActionBar(
-              likes: post.likes,
-              comments: post.comments,
-              shares: post.shares,
+              postId: post.id, // <-- tek gereken bu
+              shares: post.shares, // (şimdilik mock)
             ),
           ),
         ],
@@ -126,9 +128,8 @@ class _PostCardState extends State<PostCard> {
             color: Colors.transparent,
             child: IconButton(
               iconSize: 56,
-              onPressed: () => setState(() {
-                vc.value.isPlaying ? vc.pause() : vc.play();
-              }),
+              onPressed: () =>
+                  setState(() => vc.value.isPlaying ? vc.pause() : vc.play()),
               icon: Icon(
                 vc.value.isPlaying
                     ? Icons.pause_circle_filled

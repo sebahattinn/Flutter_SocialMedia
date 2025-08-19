@@ -1,7 +1,7 @@
 import 'post.dart';
 import 'user.dart';
 
-// pravatar CORS sorunları yüzünden picsum kullanalım
+// CORS sorunları için pravatar yerine picsum
 String _avatar(int i) => 'https://picsum.photos/seed/user$i/200/200';
 
 final users = List.generate(5, (i) {
@@ -31,7 +31,7 @@ final posts = [
     id: 'p2',
     author: users[1],
     text: "Designing the week. What's your plan?",
-    // sadece metin
+    // imageUrls vermesen de olur; default []
     createdAt: DateTime.now().subtract(const Duration(hours: 1)),
     likes: 41,
     comments: 6,
@@ -44,14 +44,13 @@ final posts = [
     imageUrls: const [
       'https://images.unsplash.com/photo-1501973801540-537f08ccae7b?q=80&w=1200&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop', // örnek tekrar
+      'https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop',
     ],
     createdAt: DateTime.now().subtract(const Duration(hours: 4)),
     likes: 320,
     comments: 22,
     shares: 9,
   ),
-  // İstersen video örneği:
   Post(
     id: 'p4',
     author: users[3],

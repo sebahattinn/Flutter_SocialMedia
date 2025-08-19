@@ -1,53 +1,50 @@
 import 'package:flutter/material.dart';
-import '../../../../core/formatters.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:social_media_app/features/widgets/comments_sheet.dart';
 
-class ActionBar extends StatelessWidget {
-  final int likes;
-  final int comments;
-  final int shares;
-  const ActionBar({
-    super.key,
-    required this.likes,
-    required this.comments,
-    required this.shares,
-  });
+import '../../../state/like_comment_providers.dart'; // postRealtimeProvider burada
+
+class ActionBar extends ConsumerWidget {
+  final String postId;
+  final int shares; // şimdilik mock
+
+  const ActionBar({super.key, required this.postId, this.shares = 0});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pr = ref.watch(
+      postRealtimeProvider(postId),
+    ); // likes, comments, isLiked
+
     return Row(
       children: [
-        _IconText(icon: Icons.favorite_border, label: compactNumber(likes)),
-        const SizedBox(width: 16),
-        _IconText(
-          icon: Icons.mode_comment_outlined,
-          label: compactNumber(comments),
+        IconButton(
+          onPressed: () => ref
+              .read(postRealtimeProvider(postId).notifier)
+              .toggleLikeOptimistic(),
+          icon: Icon(
+            pr.isLiked ? Icons.favorite : Icons.favorite_border,
+            color: pr.isLiked ? Colors.redAccent : null,
+          ),
         ),
-        const SizedBox(width: 16),
-        _IconText(icon: Icons.share_outlined, label: compactNumber(shares)),
+        Text('${pr.likes}'),
+        const SizedBox(width: 12),
+        IconButton(
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => CommentsSheet(postId: postId),
+            );
+          },
+          icon: const Icon(Icons.comment_outlined),
+        ),
+        Text('${pr.comments}'),
         const Spacer(),
-        IconButton(onPressed: () {}, icon: const Icon(Icons.bookmark_border)),
+        const Icon(Icons.share_outlined),
+        Text('$shares'),
       ],
-    );
-  }
-}
-
-class _IconText extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _IconText({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () {},
-      child: Row(
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
     );
   }
 }

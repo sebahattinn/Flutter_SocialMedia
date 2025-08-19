@@ -1,14 +1,11 @@
-import 'user.dart';
+import 'package:social_media_app/models/user.dart';
 
 class Post {
   final String id;
   final AppUser author;
+
   final String text;
-
-  /// Çoklu görsel desteği
-  final List<String> imageUrls;
-
-  /// Tek video URL’i (opsiyonel)
+  final List<String> imageUrls; // non-nullable, default []
   final String? videoUrl;
 
   final DateTime createdAt;
@@ -20,7 +17,7 @@ class Post {
     required this.id,
     required this.author,
     this.text = '',
-    this.imageUrls = const [],
+    this.imageUrls = const [], // <-- önemli
     this.videoUrl,
     required this.createdAt,
     this.likes = 0,
@@ -29,5 +26,5 @@ class Post {
   });
 
   bool get hasImages => imageUrls.isNotEmpty;
-  bool get hasVideo => (videoUrl ?? '').isNotEmpty;
+  bool get hasVideo => videoUrl != null && videoUrl!.isNotEmpty;
 }
