@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Clipboard
 import 'package:video_player/video_player.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../../../core/spacing.dart';
 import '../../../models/post.dart';
+import '../../../services/post_repo.dart';
 import 'avatar.dart';
-import 'action_bar.dart'; // <-- ActionBar(postId: ...) sürümü
+import 'action_bar.dart';
 
 class PostCard extends StatefulWidget {
   final Post post;
@@ -17,9 +21,31 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   VideoPlayerController? _vc;
 
+  // images carousel state
+  PageController? _imagePager;
+  int _imgIndex = 0;
+
   @override
   void initState() {
     super.initState();
+    _initVideoIfNeeded();
+    _initPagerIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.videoUrl != widget.post.videoUrl) {
+      _disposeVideo();
+      _initVideoIfNeeded();
+    }
+    if (oldWidget.post.imageUrls != widget.post.imageUrls) {
+      _disposePager();
+      _initPagerIfNeeded();
+    }
+  }
+
+  void _initVideoIfNeeded() {
     if (widget.post.hasVideo) {
       _vc = VideoPlayerController.networkUrl(Uri.parse(widget.post.videoUrl!))
         ..initialize().then((_) {
@@ -28,9 +54,28 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
+  void _disposeVideo() {
+    _vc?.dispose();
+    _vc = null;
+  }
+
+  void _initPagerIfNeeded() {
+    if (widget.post.hasImages) {
+      _imagePager = PageController();
+      _imgIndex = 0;
+    }
+  }
+
+  void _disposePager() {
+    _imagePager?.dispose();
+    _imagePager = null;
+    _imgIndex = 0;
+  }
+
   @override
   void dispose() {
-    _vc?.dispose();
+    _disposeVideo();
+    _disposePager();
     super.dispose();
   }
 
@@ -38,6 +83,7 @@ class _PostCardState extends State<PostCard> {
   Widget build(BuildContext context) {
     final post = widget.post;
     final radius = BorderRadius.circular(16);
+    final isMine = post.author.id == PostRepo.devUserId;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: radius),
@@ -66,9 +112,113 @@ class _PostCardState extends State<PostCard> {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () {},
+
+                // === 3 nokta menüsü ===
+                PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz),
+                  onSelected: (value) async {
+                    switch (value) {
+                      case 'delete':
+                        final ok =
+                            await showDialog<bool>(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Delete post?'),
+                                content: const Text(
+                                  'This action cannot be undone.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            ) ??
+                            false;
+                        if (!ok) return;
+
+                        try {
+                          await PostRepo.deletePost(post.id);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Post deleted')),
+                          );
+                        } on PostgrestException catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Delete failed: ${e.message}'),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Delete failed: $e')),
+                          );
+                        }
+                        break;
+
+                      case 'copy':
+                        final link = _postLink(post.id);
+                        await Clipboard.setData(ClipboardData(text: link));
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Link copied')),
+                        );
+                        break;
+
+                      case 'report':
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Thanks, we’ll review this.'),
+                          ),
+                        );
+                        break;
+                    }
+                  },
+                  itemBuilder: (_) => isMine
+                      ? const [
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline),
+                                SizedBox(width: 8),
+                                Text('Delete post'),
+                              ],
+                            ),
+                          ),
+                        ]
+                      : const [
+                          PopupMenuItem(
+                            value: 'copy',
+                            child: Row(
+                              children: [
+                                Icon(Icons.link),
+                                SizedBox(width: 8),
+                                Text('Copy link'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'report',
+                            child: Row(
+                              children: [
+                                Icon(Icons.flag_outlined),
+                                SizedBox(width: 8),
+                                Text('Report'),
+                              ],
+                            ),
+                          ),
+                        ],
                 ),
               ],
             ),
@@ -97,15 +247,14 @@ class _PostCardState extends State<PostCard> {
           // ACTIONS
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-            child: ActionBar(
-              postId: post.id, // <-- tek gereken bu
-              shares: post.shares, // (şimdilik mock)
-            ),
+            child: ActionBar(postId: post.id, shares: post.shares),
           ),
         ],
       ),
     );
   }
+
+  String _postLink(String id) => 'yourapp://post/$id';
 
   Widget _buildVideo(BorderRadius radius) {
     final vc = _vc;
@@ -115,35 +264,76 @@ class _PostCardState extends State<PostCard> {
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
-    return ClipRRect(
-      borderRadius: radius,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: vc.value.aspectRatio,
-            child: VideoPlayer(vc),
-          ),
-          Material(
-            color: Colors.transparent,
-            child: IconButton(
-              iconSize: 56,
-              onPressed: () =>
-                  setState(() => vc.value.isPlaying ? vc.pause() : vc.play()),
-              icon: Icon(
-                vc.value.isPlaying
-                    ? Icons.pause_circle_filled
-                    : Icons.play_circle_fill,
-                color: Colors.white70,
+
+    // ekrandan çıkınca pause
+    return VisibilityDetector(
+      key: Key('video-${widget.post.id}'),
+      onVisibilityChanged: (info) {
+        if (info.visibleFraction < 0.2) {
+          if (vc.value.isPlaying) {
+            vc.pause();
+          }
+        }
+      },
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AspectRatio(
+              aspectRatio: vc.value.aspectRatio,
+              child: VideoPlayer(vc),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: IconButton(
+                iconSize: 56,
+                // setState callback'inde Future döndürmeyelim
+                onPressed: () {
+                  setState(() {
+                    if (vc.value.isPlaying) {
+                      vc.pause();
+                    } else {
+                      vc.play();
+                    }
+                  });
+                },
+                icon: Icon(
+                  vc.value.isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_fill,
+                  color: Colors.white70,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _arrowButton({required bool left, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(6),
+        child: Icon(
+          left ? Icons.chevron_left : Icons.chevron_right,
+          color: Colors.white,
+          size: 26,
+        ),
       ),
     );
   }
 
   Widget _buildImages(BorderRadius radius, List<String> urls) {
+    final pager = _imagePager ?? PageController();
+    final hasMultiple = urls.length > 1;
+
     if (urls.length == 1) {
       return ClipRRect(
         borderRadius: radius,
@@ -154,22 +344,61 @@ class _PostCardState extends State<PostCard> {
       );
     }
 
-    final controller = PageController();
     return ClipRRect(
       borderRadius: radius,
-      child: Column(
+      child: Stack(
+        alignment: Alignment.center,
         children: [
           AspectRatio(
             aspectRatio: 16 / 9,
             child: PageView.builder(
-              controller: controller,
+              controller: pager,
               itemCount: urls.length,
+              physics: const PageScrollPhysics(),
+              onPageChanged: (i) => setState(() => _imgIndex = i),
               itemBuilder: (_, i) => Image.network(urls[i], fit: BoxFit.cover),
             ),
           ),
-          const SizedBox(height: 6),
-          _Dots(controller: controller, length: urls.length),
-          const SizedBox(height: 6),
+
+          // Sol ok
+          if (hasMultiple && _imgIndex > 0)
+            Positioned(
+              left: 8,
+              child: _arrowButton(
+                left: true,
+                onTap: () {
+                  final next = (_imgIndex - 1).clamp(0, urls.length - 1);
+                  pager.animateToPage(
+                    next,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                  );
+                },
+              ),
+            ),
+
+          // Sağ ok
+          if (hasMultiple && _imgIndex < urls.length - 1)
+            Positioned(
+              right: 8,
+              child: _arrowButton(
+                left: false,
+                onTap: () {
+                  final next = (_imgIndex + 1).clamp(0, urls.length - 1);
+                  pager.animateToPage(
+                    next,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                  );
+                },
+              ),
+            ),
+
+          // Dots
+          Positioned(
+            bottom: 6,
+            child: _Dots(controller: pager, length: urls.length),
+          ),
         ],
       ),
     );

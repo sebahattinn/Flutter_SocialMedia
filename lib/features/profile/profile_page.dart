@@ -1,106 +1,232 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../state/follow_controller.dart';
+import '../../state/feed_controller.dart';
+import '../../services/post_repo.dart';
+import 'package:social_media_app/features/widgets/post_card.dart';
 
 class ProfilePage extends ConsumerWidget {
-  const ProfilePage({super.key});
+  final String? userId; // null means current user profile
+
+  const ProfilePage({super.key, this.userId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // DEMO IDs — must match your Supabase rows
-    const me = '00000000-0000-0000-0000-000000000001';
-    const target = '00000000-0000-0000-0000-000000000002';
+    final targetUserId = userId ?? PostRepo.devUserId;
+    final postsAsync = ref.watch(profilePostsProvider(targetUserId));
 
-    final provider = followControllerProvider(
-      const FollowIds(me: me, target: target),
-    );
-    final s = ref.watch(provider);
-    final c = ref.read(provider.notifier);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: CustomScrollView(
+        slivers: [
+          // Profile Header
+          SliverToBoxAdapter(child: _buildProfileHeader(context)),
 
-    return CustomScrollView(
-      slivers: [
-        const SliverAppBar(floating: true, snap: true, title: Text('Profile')),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const CircleAvatar(
-                  radius: 46,
-                  backgroundImage: NetworkImage(
-                    'https://picsum.photos/seed/aybars/200/200',
+          // Posts Section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.grid_on, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Posts',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
+                ],
+              ),
+            ),
+          ),
+
+          // Posts Grid/List
+          postsAsync.when(
+            loading: () => const SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: CircularProgressIndicator(),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Aybars Mete',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                ),
-                const Text('@aybars', style: TextStyle(color: Colors.grey)),
-                const SizedBox(height: 12),
-                const Text(
-                  'Building things. Coffee, code, and clean design.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _stat('Followers', _compact(s.followers)),
-                    const SizedBox(width: 24),
-                    _stat('Following', _compact(s.following)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                s.isFollowing
-                    ? OutlinedButton.icon(
-                        onPressed: c.toggleFollow,
-                        icon: const Icon(Icons.person_remove),
-                        label: const Text('Unfollow'),
-                      )
-                    : FilledButton.icon(
-                        onPressed: c.toggleFollow,
-                        icon: const Icon(Icons.person_add_alt_1),
-                        label: const Text('Follow'),
+              ),
+            ),
+            error: (error, stack) => SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Colors.grey,
                       ),
-                if (s.loading == true)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: LinearProgressIndicator(minHeight: 2),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading posts',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+                      ),
+                    ],
                   ),
-                if (s.error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      '${s.error}',
-                      style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 12,
+                ),
+              ),
+            ),
+            data: (posts) {
+              if (posts.isEmpty) {
+                return const SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No posts yet',
+                            style: TextStyle(color: Colors.grey, fontSize: 16),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-              ],
-            ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final post = posts[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    child: PostCard(post: post), // Use your existing PostCard
+                  );
+                }, childCount: posts.length),
+              );
+            },
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _stat(String label, String value) => Column(
-    children: [
-      Text(
-        value,
-        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-      ),
-      const SizedBox(height: 4),
-      Text(label, style: const TextStyle(color: Colors.grey)),
-    ],
-  );
+  Widget _buildProfileHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          // Avatar and basic info
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 40,
+                backgroundColor: Colors.grey[300],
+                backgroundImage: const NetworkImage(
+                  'https://picsum.photos/id/1027/200/200',
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '@me',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
 
-  String _compact(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
+          const SizedBox(height: 16),
+
+          // Bio
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Welcome to my profile! This is where I share my thoughts and moments.',
+              style: TextStyle(fontSize: 14),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Stats row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildStatColumn(context, '0', 'Posts'),
+              _buildStatColumn(context, '0', 'Followers'),
+              _buildStatColumn(context, '0', 'Following'),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    // Edit profile action
+                  },
+                  child: const Text('Edit Profile'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    // Share profile action
+                  },
+                  child: const Text('Share Profile'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatColumn(BuildContext context, String count, String label) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+        ),
+      ],
+    );
   }
 }
