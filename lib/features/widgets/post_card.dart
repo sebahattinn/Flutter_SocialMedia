@@ -3,10 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+
 import '../../../../core/spacing.dart';
 import '../../../models/post.dart';
 import '../../../services/post_repo.dart';
-import '../../../state/video_coordinator.dart'; // <--- EKLEDİK
+import '../../../state/video_coordinator.dart';
 import 'avatar.dart';
 import 'action_bar.dart';
 
@@ -19,6 +20,8 @@ class PostCard extends StatefulWidget {
 }
 
 class _PostCardState extends State<PostCard> {
+  static const double _mediaMaxH = 420;
+
   VideoPlayerController? _vc;
 
   PageController? _imagePager;
@@ -30,7 +33,7 @@ class _PostCardState extends State<PostCard> {
     _initVideoIfNeeded();
     _initPagerIfNeeded();
 
-    // Başka bir kart oynatmaya başlarsa bu kart pause olsun
+    // başka bir kart video oynatınca bu kart pause olsun
     VideoCoordinator.current.addListener(_onGlobalPlayChanged);
   }
 
@@ -52,8 +55,6 @@ class _PostCardState extends State<PostCard> {
     final mine = current == widget.post.id;
     final vc = _vc;
     if (vc == null) return;
-
-    // Başkası çalıyorsa ben durayım
     if (!mine && vc.value.isPlaying) {
       vc.pause();
       if (mounted) setState(() {});
@@ -96,6 +97,14 @@ class _PostCardState extends State<PostCard> {
     super.dispose();
   }
 
+  // ---- helpers ----
+  void _safeSnack(String msg) {
+    if (!context.mounted) return; // <-- lint mutlu
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  String _postLink(String id) => 'yourapp://post/$id';
+
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
@@ -129,6 +138,7 @@ class _PostCardState extends State<PostCard> {
                     ],
                   ),
                 ),
+
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz),
                   onSelected: (value) async {
@@ -161,41 +171,22 @@ class _PostCardState extends State<PostCard> {
 
                         try {
                           await PostRepo.deletePost(post.id);
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Post deleted')),
-                          );
+                          _safeSnack('Post deleted');
                         } on PostgrestException catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Delete failed: ${e.message}'),
-                            ),
-                          );
+                          _safeSnack('Delete failed: ${e.message}');
                         } catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Delete failed: $e')),
-                          );
+                          _safeSnack('Delete failed: $e');
                         }
                         break;
 
                       case 'copy':
                         final link = _postLink(post.id);
                         await Clipboard.setData(ClipboardData(text: link));
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Link copied')),
-                        );
+                        _safeSnack('Link copied');
                         break;
 
                       case 'report':
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Thanks, we’ll review this.'),
-                          ),
-                        );
+                        _safeSnack('Thanks, we’ll review this.');
                         break;
                     }
                   },
@@ -269,8 +260,6 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
-  String _postLink(String id) => 'yourapp://post/$id';
-
   Widget _buildVideo(BorderRadius radius) {
     final vc = _vc;
     if (vc == null || !vc.value.isInitialized) {
@@ -280,102 +269,86 @@ class _PostCardState extends State<PostCard> {
       );
     }
 
+    final ar = vc.value.aspectRatio == 0 ? 16 / 9 : vc.value.aspectRatio;
+
     return VisibilityDetector(
       key: Key('video-${widget.post.id}'),
       onVisibilityChanged: (info) {
+        // ekrandan kaybolunca durdur
         if (info.visibleFraction < 0.2) {
-          // ekrandan çıktı → durdur ve koordinatoru temizle
-          if (vc.value.isPlaying) {
-            vc.pause();
-          }
+          if (vc.value.isPlaying) vc.pause();
           VideoCoordinator.stopIfCurrent(widget.post.id);
           if (mounted) setState(() {});
         }
       },
       child: ClipRRect(
         borderRadius: radius,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            AspectRatio(
-              aspectRatio: vc.value.aspectRatio,
-              child: VideoPlayer(vc),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: IconButton(
-                iconSize: 56,
-                onPressed: () {
-                  setState(() {
-                    if (vc.value.isPlaying) {
-                      vc.pause();
-                      VideoCoordinator.stopIfCurrent(widget.post.id);
-                    } else {
-                      // ben oynayacağım → diğer kartlar listener ile pause olacak
-                      VideoCoordinator.requestPlay(widget.post.id);
-                      vc.play();
-                    }
-                  });
-                },
-                icon: Icon(
-                  vc.value.isPlaying
-                      ? Icons.pause_circle_filled
-                      : Icons.play_circle_fill,
-                  color: Colors.white70,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: _mediaMaxH),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              AspectRatio(aspectRatio: ar, child: VideoPlayer(vc)),
+              Material(
+                color: Colors.transparent,
+                child: IconButton(
+                  iconSize: 56,
+                  onPressed: () {
+                    setState(() {
+                      if (vc.value.isPlaying) {
+                        vc.pause();
+                        VideoCoordinator.stopIfCurrent(widget.post.id);
+                      } else {
+                        VideoCoordinator.requestPlay(widget.post.id);
+                        vc.play();
+                      }
+                    });
+                  },
+                  icon: Icon(
+                    vc.value.isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_fill,
+                    color: Colors.white70,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _arrowButton({required bool left, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.black45,
-          shape: BoxShape.circle,
-        ),
-        padding: const EdgeInsets.all(6),
-        child: Icon(
-          left ? Icons.chevron_left : Icons.chevron_right,
-          color: Colors.white,
-          size: 26,
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildImages(BorderRadius radius, List<String> urls) {
-    final pager = _imagePager ?? PageController();
+    final pager = _imagePager!;
     final hasMultiple = urls.length > 1;
 
+    // tek görsel → doğal oranı öğrenip uygula
     if (urls.length == 1) {
       return ClipRRect(
         borderRadius: radius,
-        child: AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Image.network(urls.first, fit: BoxFit.cover),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: _mediaMaxH),
+          child: _NetworkAspectImage(url: urls.first, fit: BoxFit.cover),
         ),
       );
     }
 
+    // çoklu görsel
     return ClipRRect(
       borderRadius: radius,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: _mediaMaxH),
             child: PageView.builder(
               controller: pager,
               itemCount: urls.length,
               physics: const PageScrollPhysics(),
               onPageChanged: (i) => setState(() => _imgIndex = i),
-              itemBuilder: (_, i) => Image.network(urls[i], fit: BoxFit.cover),
+              itemBuilder: (_, i) =>
+                  _NetworkAspectImage(url: urls[i], fit: BoxFit.cover),
             ),
           ),
 
@@ -420,12 +393,81 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  Widget _arrowButton({required bool left, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(.35),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(6),
+        child: Icon(
+          left ? Icons.chevron_left : Icons.chevron_right,
+          color: Colors.white,
+          size: 26,
+        ),
+      ),
+    );
+  }
+
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
     if (diff.inHours < 24) return '${diff.inHours}h';
     return '${diff.inDays}d';
+  }
+}
+
+/// Doğal en/boy oranını hesaplayıp uygun AspectRatio ile çizen ağ görseli.
+/// fit=cover (varsayılan) kırpmayı azaltır çünkü oran görüntüden okunuyor.
+/// Üst parent max yükseklikle sınırlar.
+class _NetworkAspectImage extends StatefulWidget {
+  final String url;
+  final BoxFit fit;
+  const _NetworkAspectImage({required this.url, required this.fit});
+
+  @override
+  State<_NetworkAspectImage> createState() => _NetworkAspectImageState();
+}
+
+class _NetworkAspectImageState extends State<_NetworkAspectImage> {
+  double? _ratio; // width / height
+
+  @override
+  void initState() {
+    super.initState();
+    final stream = Image.network(
+      widget.url,
+    ).image.resolve(const ImageConfiguration());
+    stream.addListener(
+      ImageStreamListener(
+        (info, _) {
+          final w = info.image.width.toDouble();
+          final h = info.image.height.toDouble();
+          if (mounted) setState(() => _ratio = (h == 0 ? null : w / h));
+        },
+        onError: (_, __) {
+          // yut
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = _ratio ?? (16 / 9); // yüklenene kadar makul oran
+    return AspectRatio(
+      aspectRatio: ratio,
+      child: Image.network(
+        widget.url,
+        fit: widget.fit,
+        width: double.infinity,
+        height: double.infinity,
+        alignment: Alignment.center,
+      ),
+    );
   }
 }
 
