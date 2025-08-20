@@ -1,19 +1,32 @@
-class ChatMessage {
-  final String id;
-  final String text;
-  final DateTime at;
-  final bool mine;
-  ChatMessage(this.id, this.text, this.at, this.mine);
-}
+import 'package:flutter/foundation.dart';
+import '../models/message.dart';
 
-class ChatModel {
-  final List<ChatMessage> messages;
+@immutable
+class ChatState {
   final bool connected;
-  const ChatModel({this.messages = const [], this.connected = false});
+  final String? conversationId;
+  final List<ChatMessage> messages;
 
-  ChatModel copyWith({List<ChatMessage>? messages, bool? connected}) =>
-      ChatModel(
-        messages: messages ?? this.messages,
-        connected: connected ?? this.connected,
-      );
+  const ChatState({
+    required this.connected,
+    required this.messages,
+    required this.conversationId,
+  });
+
+  const ChatState.initial()
+    : connected = false,
+      messages = const [],
+      conversationId = null;
+
+  ChatState copyWith({
+    bool? connected,
+    String? conversationId,
+    List<ChatMessage>? messages,
+  }) {
+    return ChatState(
+      connected: connected ?? this.connected,
+      conversationId: conversationId ?? this.conversationId,
+      messages: messages ?? this.messages,
+    );
+  }
 }

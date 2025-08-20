@@ -398,6 +398,7 @@ class _PostCardState extends State<PostCard> {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
+          // ignore: deprecated_member_use
           color: Colors.black.withOpacity(.35),
           shape: BoxShape.circle,
         ),

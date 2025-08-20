@@ -1,21 +1,23 @@
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../dev_fake_auth.dart'; // kDevMyUid
 
 class PostRepo {
   static SupabaseClient get _s => Supabase.instance.client;
 
-  // DEMO user (auth gelene kadar)
-  static const String devUserId = '00000000-0000-0000-0000-000000000001';
+  /// 🔑 Uygulamanın HER YERİNDE kullanacağımız aktif kullanıcı ID'si.
+  /// - Gerçek auth varsa: auth.currentUser.id
+  /// - Dev modda: kDevMyUid
+  static String get devUserId => _s.auth.currentUser?.id ?? kDevMyUid;
 
   // UUID helper
   static final RegExp _uuidRe = RegExp(
-    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static bool isUuid(String s) => _uuidRe.hasMatch(s);
 
   // small debug helper
   static void _log(String msg) {
-    // tek yerden kapat/aç
     const debug = true;
     if (debug) print('[PostRepo] $msg');
   }
@@ -27,15 +29,19 @@ class PostRepo {
     String? videoUrl,
     String? authorId,
   }) async {
+    final uid = authorId ?? devUserId;
     _log(
-      'createPostDev(authorId=${authorId ?? devUserId}, images=${imageUrls.length}, hasVideo=${videoUrl != null})',
+      'createPostDev(authorId=$uid, images=${imageUrls.length}, hasVideo=${videoUrl != null})',
     );
 
     final inserted = await _s
         .from('posts')
         .insert({
-          'author_id': authorId ?? devUserId,
-          if (text != null && text.isNotEmpty) 'text': text,
+          // Şeman: author_id
+          'author_id': uid,
+          if (text != null && text.isNotEmpty)
+            'text': text, // content/text/caption
+          'created_at': DateTime.now().toIso8601String(),
         })
         .select('id')
         .single();
@@ -49,7 +55,7 @@ class PostRepo {
     for (int i = 0; i < imageUrls.length; i++) {
       mediaPayload.add({
         'post_id': postId,
-        'kind': 'image', // şemana göre: kind/url/order_index
+        'kind': 'image',
         'url': imageUrls[i],
         'order_index': i,
       });
@@ -95,13 +101,11 @@ class PostRepo {
     final list = (rows as List)
         .map<Map<String, dynamic>>((m) {
           final r = Map<String, dynamic>.from(m);
-
           final url = (r['url'] ?? '') as String;
           final kind = (r['kind'] ?? 'image') as String;
           final orderIndex = (r['order_index'] ?? 0) as int;
-
           return {
-            'media_url': url, // eski kullanıma uygun
+            'media_url': url,
             'media_type': kind,
             'order_index': orderIndex,
             'created': r['created_at'] ?? DateTime.now().toIso8601String(),
@@ -151,7 +155,6 @@ class PostRepo {
   /// Realtime tek filtre limiti: user_id ile filtre + client-side postId check
   static Stream<bool> isLikedByMe(String postId, {String? userId}) {
     if (!isUuid(postId)) return Stream.value(false);
-
     final uid = userId ?? devUserId;
     return _s
         .from('post_likes')
@@ -163,7 +166,6 @@ class PostRepo {
   // -------- Actions --------
   static Future<void> toggleLike(String postId, {String? userId}) async {
     if (!isUuid(postId)) return;
-
     final uid = userId ?? devUserId;
 
     final existing = await _s
@@ -180,7 +182,11 @@ class PostRepo {
           .eq('post_id', postId)
           .eq('user_id', uid);
     } else {
-      await _s.from('post_likes').insert({'post_id': postId, 'user_id': uid});
+      await _s.from('post_likes').insert({
+        'post_id': postId,
+        'user_id': uid,
+        'created_at': DateTime.now().toIso8601String(),
+      });
     }
   }
 
@@ -206,12 +212,12 @@ class PostRepo {
     String? userId,
   }) async {
     if (!isUuid(postId)) return;
-
     final uid = userId ?? devUserId;
     await _s.from('comments').insert({
       'post_id': postId,
       'author_id': uid,
       'text': text,
+      'created_at': DateTime.now().toIso8601String(),
     });
   }
 
@@ -224,7 +230,6 @@ class PostRepo {
     final uid = userId ?? devUserId;
     _log('deletePost(postId=$postId, uid=$uid)');
 
-    // 0) Önce sahiplik kontrolü (kullanıcıya net hata döndürelim)
     final post = await _s
         .from('posts')
         .select('id, author_id')
@@ -239,32 +244,22 @@ class PostRepo {
       throw Exception('not owner');
     }
 
-    // 1) RPC dene (varsayım: delete_post_cascade(uuid, uuid) -> boolean)
     try {
       _log('trying RPC delete_post_cascade...');
       final rpcResult = await _s.rpc(
         'delete_post_cascade',
         params: {'p_post_id': postId, 'p_author_id': uid},
       );
-
-      // supabase-dart scalar döndürür -> true/false bekliyoruz
       if (rpcResult is bool && rpcResult == true) {
         _log('RPC delete ok');
         return;
       } else {
-        _log(
-          'RPC returned non-true ($rpcResult), falling back to client cascade.',
-        );
+        _log('RPC returned non-true ($rpcResult), fallback...');
       }
     } on PostgrestException catch (e) {
-      // 42883: function does not exist
-      _log(
-        'RPC failed (${e.code} ${e.message}), falling back to client cascade.',
-      );
-      // fallback'a geçeceğiz
+      _log('RPC failed (${e.code} ${e.message}), fallback...');
     }
 
-    // 2) Fallback: client-side cascade
     try {
       _log('client cascade: children -> post');
       await _s.from('post_likes').delete().eq('post_id', postId);
@@ -286,7 +281,6 @@ class PostRepo {
       _log('client cascade ok');
     } on PostgrestException catch (e) {
       _log('client cascade failed: ${e.code} ${e.message}');
-      // RLS/policy engeli ise burada patlar
       throw Exception('delete blocked: ${e.message}');
     }
   }

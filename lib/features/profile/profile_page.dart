@@ -1,231 +1,247 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../state/feed_controller.dart';
-import '../../services/post_repo.dart';
-import 'package:social_media_app/features/widgets/post_card.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../current_user.dart'; // currentUidProvider
+import 'package:social_media_app/state/auth_controller.dart';
 
 class ProfilePage extends ConsumerWidget {
-  final String? userId; // null means current user profile
-
   const ProfilePage({super.key, this.userId});
+  final String? userId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final targetUserId = userId ?? PostRepo.devUserId;
-    final postsAsync = ref.watch(profilePostsProvider(targetUserId));
+    final me = ref.watch(currentUidProvider);
+    final uid = userId ?? me;
+    if (uid == null) {
+      return const Scaffold(body: Center(child: Text('Giriş yapmalısın')));
+    }
+    return _ProfileContent(uid: uid, ref: ref);
+  }
+}
 
+class _ProfileContent extends StatefulWidget {
+  const _ProfileContent({required this.uid, required this.ref});
+  final String uid;
+  final WidgetRef ref;
+
+  @override
+  State<_ProfileContent> createState() => _ProfileContentState();
+}
+
+class _ProfileContentState extends State<_ProfileContent> {
+  final _sb = Supabase.instance.client;
+  late Future<
+    ({
+      Map<String, dynamic>? person,
+      List<Map<String, dynamic>> posts,
+      int followers,
+      int following,
+    })
+  >
+  _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<
+    ({
+      Map<String, dynamic>? person,
+      List<Map<String, dynamic>> posts,
+      int followers,
+      int following,
+    })
+  >
+  _load() async {
+    try {
+      final personRes = await _sb
+          .from('people_search')
+          .select('id, handle, name, avatar_url')
+          .eq('id', widget.uid)
+          .maybeSingle();
+      final person = personRes == null
+          ? null
+          : Map<String, dynamic>.from(personRes as Map);
+
+      final postsRes = await _sb
+          .from('posts')
+          .select()
+          .eq('author_id', widget.uid)
+          .order('created_at', ascending: false);
+      final posts = (postsRes as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      final followersRes = await _sb
+          .from('follows')
+          .select('follower')
+          .eq('followee', widget.uid);
+      final followingRes = await _sb
+          .from('follows')
+          .select('followee')
+          .eq('follower', widget.uid);
+
+      return (
+        person: person,
+        posts: posts,
+        followers: (followersRes as List).length,
+        following: (followingRes as List).length,
+      );
+    } catch (e) {
+      debugPrint('Profile load error: $e');
+      return (
+        person: null,
+        posts: <Map<String, dynamic>>[],
+        followers: 0,
+        following: 0,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: CustomScrollView(
-        slivers: [
-          // Profile Header
-          SliverToBoxAdapter(child: _buildProfileHeader(context)),
+      body:
+          FutureBuilder<
+            ({
+              Map<String, dynamic>? person,
+              List<Map<String, dynamic>> posts,
+              int followers,
+              int following,
+            })
+          >(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return Center(child: Text('Yüklenemedi: ${snap.error}'));
+              }
 
-          // Posts Section
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  const Icon(Icons.grid_on, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Posts',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+              final person = snap.data!.person;
+              final posts = snap.data!.posts;
+              final followers = snap.data!.followers;
+              final following = snap.data!.following;
 
-          // Posts Grid/List
-          postsAsync.when(
-            loading: () => const SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-            ),
-            error: (error, stack) => SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 48,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error loading posts',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+              final displayName =
+                  (person?['name'] as String?) ??
+                  (person?['handle'] as String?) ??
+                  'User';
+              final handle = person?['handle'] as String? ?? '';
+              final avatarUrl = person?['avatar_url'] as String?;
+              final initial = displayName.isNotEmpty
+                  ? displayName.characters.first.toUpperCase()
+                  : '?';
+
+              return CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    pinned: true,
+                    title: Text(displayName),
+                    actions: [
+                      IconButton(
+                        onPressed: () {
+                          widget.ref
+                              .read(authControllerProvider.notifier)
+                              .logout();
+                        },
+                        icon: const Icon(Icons.logout),
                       ),
                     ],
                   ),
-                ),
-              ),
-            ),
-            data: (posts) {
-              if (posts.isEmpty) {
-                return const SliverToBoxAdapter(
-                  child: Center(
+                  SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.all(32.0),
-                      child: Column(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.photo_library_outlined,
-                            size: 48,
-                            color: Colors.grey,
+                          CircleAvatar(
+                            radius: 36,
+                            backgroundImage:
+                                (avatarUrl != null && avatarUrl.isNotEmpty)
+                                ? NetworkImage(avatarUrl)
+                                : null,
+                            child: (avatarUrl == null || avatarUrl.isEmpty)
+                                ? Text(
+                                    initial,
+                                    style: const TextStyle(fontSize: 28),
+                                  )
+                                : null,
                           ),
-                          SizedBox(height: 16),
-                          Text(
-                            'No posts yet',
-                            style: TextStyle(color: Colors.grey, fontSize: 16),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  displayName,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                if (handle.isNotEmpty)
+                                  Text(
+                                    '@$handle',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(color: Colors.grey),
+                                  ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    _Stat(label: 'Posts', value: posts.length),
+                                    const SizedBox(width: 16),
+                                    _Stat(label: 'Followers', value: followers),
+                                    const SizedBox(width: 16),
+                                    _Stat(label: 'Following', value: following),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                );
-              }
-
-              return SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final post = posts[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
-                    ),
-                    child: PostCard(post: post), // Use your existing PostCard
-                  );
-                }, childCount: posts.length),
+                  const SliverToBoxAdapter(child: Divider(height: 1)),
+                  SliverList.separated(
+                    itemCount: posts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final p = posts[i];
+                      final text =
+                          (p['content'] ?? p['text'] ?? p['caption'] ?? '')
+                              .toString();
+                      final created = (p['created_at'] ?? '').toString();
+                      return ListTile(
+                        title: Text(text.isEmpty ? '—' : text),
+                        subtitle: Text(created),
+                      );
+                    },
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 48)),
+                ],
               );
             },
           ),
-        ],
-      ),
     );
   }
+}
 
-  Widget _buildProfileHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          // Avatar and basic info
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.grey[300],
-                backgroundImage: const NetworkImage(
-                  'https://picsum.photos/id/1027/200/200',
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'You',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '@me',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+class _Stat extends StatelessWidget {
+  const _Stat({required this.label, required this.value});
+  final String label;
+  final int value;
 
-          const SizedBox(height: 16),
-
-          // Bio
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Welcome to my profile! This is where I share my thoughts and moments.',
-              style: TextStyle(fontSize: 14),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Stats row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildStatColumn(context, '0', 'Posts'),
-              _buildStatColumn(context, '0', 'Followers'),
-              _buildStatColumn(context, '0', 'Following'),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    // Edit profile action
-                  },
-                  child: const Text('Edit Profile'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    // Share profile action
-                  },
-                  child: const Text('Share Profile'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatColumn(BuildContext context, String count, String label) {
-    return Column(
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
-        Text(
-          count,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-        ),
+        Text('$value', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(width: 4),
+        Text(label, style: Theme.of(context).textTheme.bodyMedium),
       ],
     );
   }

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/follow_repo.dart';
 import '../../services/post_repo.dart';
+import '../profile/profile_page.dart';
 import '../widgets/avatar.dart';
 
 class SearchPage extends StatefulWidget {
@@ -39,7 +40,7 @@ class _SearchPageState extends State<SearchPage> {
     setState(() => _loading = true);
     try {
       final data = await Supabase.instance.client
-          .from('people_search') // <--- birleşik view
+          .from('people_search')
           .select('id, handle, name, avatar_url')
           .or('handle.ilike.%$q%,name.ilike.%$q%')
           .limit(25);
@@ -104,13 +105,13 @@ class _SearchPageState extends State<SearchPage> {
             itemBuilder: (context, i) {
               final r = _rows[i];
               final id = r['id'] as String;
-              final handle = r['handle'] as String? ?? '';
-              final name = r['name'] as String? ?? handle;
-              final avatar = r['avatar_url'] as String?;
+              final handle = (r['handle'] as String?) ?? '';
+              final name = (r['name'] as String?) ?? handle;
+              final avatar = (r['avatar_url'] as String?) ?? '';
               final isMe = id == PostRepo.devUserId;
 
               return ListTile(
-                leading: Avatar(url: avatar ?? '', size: 44),
+                leading: Avatar(url: avatar, size: 44),
                 title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
                   '@$handle',
@@ -138,7 +139,9 @@ class _SearchPageState extends State<SearchPage> {
                         },
                       ),
                 onTap: () {
-                  // TODO: profil sayfasına git
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => ProfilePage(userId: id)),
+                  );
                 },
               );
             },

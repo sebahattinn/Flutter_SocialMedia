@@ -28,6 +28,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // DİKKAT: AppBar yok — sadece sayfaların kendi AppBar'ı görünecek
       body: PageStorage(
         bucket: _bucket,
         child: IndexedStack(index: _index, children: _pages),
