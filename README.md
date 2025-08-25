@@ -13,12 +13,10 @@ Includes email/password authentication, profiles, feed scaffolding, search, and 
 ## 📱 Screenshots
 
 <p align="center">
-  <img src="assets/image1.png" width="45%" />
-  <img src="assets/image2.png" width="45%" />
-</p>
-<p align="center">
-  <img src="assets/image3.png" width="45%" />
-  <img src="assets/image4.png" width="45%" />
+  <img src="assets/image1.png" width="23.5%" />
+  <img src="assets/image2.png" width="23.5%" />
+  <img src="assets/image3.png" width="23.5%" />
+  <img src="assets/image4.png" width="23.5%" />
 </p>
 
 ---
