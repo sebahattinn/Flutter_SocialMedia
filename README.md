@@ -87,8 +87,7 @@ lib/
    └─ follow_controller.dart
 
 
----
-```text
+```
 
 
 ## 🚀 Getting Started
@@ -104,7 +103,7 @@ git clone https://github.com/sebahattinn/Flutter_SocialMedia.git
 cd Flutter_SocialMedia
 flutter pub get
 
-
+```
 
 
 3) Configure Supabase
