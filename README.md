@@ -107,6 +107,7 @@ flutter pub get
 
 
 3) Configure Supabase
+```
 
 Create a project; copy Project URL and anon key.
 
@@ -115,9 +116,10 @@ Auth → Providers → Email
 For fast local dev: Confirm email = OFF (you can switch ON for prod).
 
 Database → SQL → run:
-
+```
 
 -- profiles table
+```
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique,
@@ -127,8 +129,10 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
+```
 
 -- RLS policies
+```
 create policy "read own profile"
 on public.profiles for select
 using (auth.uid() = id);
@@ -141,11 +145,11 @@ create policy "update own profile"
 on public.profiles for update
 using (auth.uid() = id);
 
-
+```
 
 Production-friendly (optional): Create the profile automatically on user creation using a trigger (so client doesn’t upsert when session is null):
 
-
+```
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -157,12 +161,15 @@ begin
   );
   return new;
 end;
+```
 $$ language plpgsql security definer;
+```
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+```
 
 4) Web redirect configuration (when Confirm email = ON)
 
@@ -182,6 +189,7 @@ flutter run -d chrome --web-port=5173
 
 
 5) App config (env)
+```
 
 supabase_service.dart reads credentials from --dart-define:
 
@@ -189,19 +197,22 @@ supabase_service.dart reads credentials from --dart-define:
 static const String _url  = String.fromEnvironment('SUPABASE_URL');
 static const String _anon = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-
+```
 
 Run with:
+```
 
 # Web (fixed port)
 flutter run -d chrome --web-port=5173 \
   --dart-define=SUPABASE_URL=https://YOUR-PROJECT.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=YOUR-ANON-KEY
-
+```
 # Mobile (Android/iOS)
+```
 flutter run \
   --dart-define=SUPABASE_URL=https://YOUR-PROJECT.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=YOUR-ANON-KEY
+```
 
 🔐 Auth Flow Notes
 
