@@ -45,44 +45,47 @@ Includes email/password authentication, profiles, feed scaffolding, search, and 
 
 ---
 
-## 🗂️ Project Structure
+## 📂 Project Structure
 
+```text
 lib/
-├─ main.dart # ProviderScope + Supabase init + MaterialApp
-├─ index.dart # HomeShell (app shell)
+├─ main.dart
+├─ index.dart
 ├─ features/
-│ ├─ auth/
-│ │ ├─ auth_gate.dart # Session-based guard
-│ │ ├─ login.dart
-│ │ └─ register.dart
-│ ├─ profile/
-│ │ └─ profile_page.dart
-│ ├─ search/
-│ │ └─ search_page.dart
-│ └─ stories/ # (placeholder / WIP)
+│  ├─ auth/
+│  │  ├─ auth_gate.dart
+│  │  ├─ login.dart
+│  │  └─ register.dart
+│  ├─ profile/
+│  │  └─ profile_page.dart
+│  ├─ search/
+│  │  └─ search_page.dart
+│  └─ stories/
+│     └─ (WIP)
 ├─ models/
-│ ├─ conversation.dart
-│ ├─ message.dart
-│ ├─ post.dart
-│ ├─ profile_brief.dart
-│ └─ user.dart
+│  ├─ conversation.dart
+│  ├─ message.dart
+│  ├─ post.dart
+│  ├─ profile_brief.dart
+│  └─ user.dart
 ├─ services/
-│ ├─ auth_service.dart
-│ ├─ chat_service.dart
-│ ├─ comments_repo.dart
-│ ├─ follow_repo.dart
-│ ├─ notifications_repo.dart
-│ ├─ post_actions.dart
-│ ├─ post_repo.dart
-│ ├─ supabase_service.dart
-│ └─ webrtc_share_service.dart
+│  ├─ auth_service.dart
+│  ├─ chat_service.dart
+│  ├─ comments_repo.dart
+│  ├─ follow_repo.dart
+│  ├─ notifications_repo.dart
+│  ├─ post_actions.dart
+│  ├─ post_repo.dart
+│  ├─ supabase_service.dart
+│  └─ webrtc_share_service.dart
 └─ state/
-├─ auth_controller.dart
-├─ auth_state.dart
-├─ chat_controller.dart
-├─ chat_state.dart
-├─ feed_controller.dart
-└─ follow_controller.dart
+   ├─ auth_controller.dart
+   ├─ auth_state.dart
+   ├─ chat_controller.dart
+   ├─ chat_state.dart
+   ├─ feed_controller.dart
+   └─ follow_controller.dart
+
 
 ---
 
